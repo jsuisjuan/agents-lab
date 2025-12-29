@@ -1,82 +1,81 @@
-import sys
-import asyncio
-from typing import Dict, Literal
+from typing import Annotated, Dict, List, Sequence, Union
 from typing_extensions import TypedDict
+from langchain_core.messages import BaseMessage, AIMessage
+from langgraph.graph.message import add_messages
 from langgraph.graph import StateGraph, START, END
+from langgraph.checkpoint.memory import MemorySaver
 from src.config import llm
 
 
 class State(TypedDict):
-    topic: str
-    joke: str
-    improved_joke: str
-    final_joke: str
+    """Represents the shared state of the conversation.
+    """
+    messages: Annotated[Sequence[BaseMessage], add_messages]
+    name: str
+    email: str
+    finished: bool
 
 
-async def generate_joke(state: State) -> Dict[str, str]:
-    """First LLM call to generate initial joke"""
-    msg = await llm.ainvoke(f"Write a short joke about {state['topic']}")
-    return {"joke": str(msg.content)}
+def greet_user(_state: State) -> Dict[str, List[AIMessage]]:
+    """Initiates the converstation by introducing the assistante and
+    asking for the user's name.
+    """
+    msg = AIMessage(content="Hello! I am assistent 360. What is your name?")
+    return {"messages": [msg]}
 
 
-def check_punchline(state: State) -> Literal["Pass", "Fail"]:
-    """Gate function to check if the joke has a punchline"""
-    if "?" in state["joke"] or "!" in state["joke"]:
-        return "Pass"
-    return "Fail"
+async def collect_name(state: State) -> Dict[str, Union[str, List[AIMessage]]]:
+    """Extracts the user's name from the last message and asks for their email.
+    """
+    last_msg = state["messages"][-1]
+    if isinstance(last_msg, AIMessage): return {}
+    last_user_msg = str(last_msg.content)
+    
+    response = await llm.ainvoke(f"Extract only the person's name from this text: {last_user_msg}")
+    user_name = str(response.content)
+    ask_email_msg = AIMessage(content=f"Nice to meet you, {user_name}! Could you please provide your e-mail address?")
+    return {"name": user_name, "messages": [ask_email_msg]}
 
 
-async def improve_joke(state: State) -> Dict[str, str]:
-    """Second LLM call to improve the joke"""
-    msg = await llm.ainvoke(f"Make this joke funnier by adding wordplay: {state['joke']}")
-    return {"improved_joke": str(msg.content)}
+async def collect_email(state: State) -> Dict[str, Union[str, List[AIMessage]]]:
+    """Extracts the email from the last message and confirms it to the user.
+    """
+    last_msg = state["messages"][-1]
+    if isinstance(last_msg, AIMessage): return {}
+    last_user_msg = str(last_msg.content)
+    
+    response = await llm.ainvoke(f"Extract only the person's email from this text: {last_user_msg}")
+    user_email = str(response.content)
+    confirmation_msg = AIMessage(content=f"Perfect, I've recorded yout email as: {user_email}.")
+    return {"email": user_email, "messages": [confirmation_msg]}
 
 
-async def polish_joke(state: State) -> Dict[str, str]:
-    """Third LLM call for final polish"""
-    msg = await llm.ainvoke(f"Add a surprising twist to this joke: {state['improved_joke']}")
-    return {"final_joke": str(msg.content)}
+def finalize_dialogue(_state: State) -> Dict[str, Union[str, List[AIMessage]]]:
+    """Sends a final thank you message and sets the finished flag to True.
+    """
+    msg = AIMessage(content="Thank you for the information! Our conversation is now complete.")
+    return {"finished": True, "messages": [msg]}
 
 
+# Graph Construction
+memory = MemorySaver()
 workflow = StateGraph(State)
 
-workflow.add_node("generate_joke", generate_joke)
-workflow.add_node("improve_joke", improve_joke)
-workflow.add_node("polish_joke", polish_joke)
+# Nodes
+workflow.add_node("greet_user", greet_user)
+workflow.add_node("collect_name", collect_name)
+workflow.add_node("collect_email", collect_email)
+workflow.add_node("finalize_dialogue", finalize_dialogue)
 
-workflow.add_edge(START, "generate_joke")
-workflow.add_conditional_edges(
-    "generate_joke", check_punchline, {"Fail": "improve_joke", "Pass": END}
+# Edges
+workflow.add_edge(START, "greet_user")
+workflow.add_edge("greet_user", "collect_name")
+workflow.add_edge("collect_name", "collect_email")
+workflow.add_edge("collect_email", "finalize_dialogue")
+workflow.add_edge("finalize_dialogue", END)
+
+# Exportable chain
+chain = workflow.compile(
+    checkpointer=memory,
+    interrupt_after=["greet_user", "collect_name"]
 )
-workflow.add_edge("improve_joke", "polish_joke")
-workflow.add_edge("polish_joke", END)
-
-
-async def main() -> None:
-    chain = workflow.compile()
-    try:
-        graph_png = chain.get_graph().draw_mermaid_png()
-        with open("chatbot_gaph.png", "wb") as f:
-            f.write(graph_png)
-        print("'chatbot_graph.png' was exported successfully")
-    except Exception as e:
-        print(f"Could not export 'chatbot_graph.png': {e}")
-    
-    choosen_topic = input()
-    
-    state = await chain.ainvoke({"topic": choosen_topic})
-    print(f"Initial joke:\n{state['joke']}\n--- --- ---\n")
-    if "improved_joke" in state:
-        print(f"Improved joke:\n{state['improved_joke']}\n--- --- ---\n")
-        print(f"Final joke:\n{state['final_joke']}")
-    else:
-        print(f"Final joke:\n{state['joke']}")
-
-
-if __name__ == "__main__":
-    if sys.platform == "win32":
-        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        pass
