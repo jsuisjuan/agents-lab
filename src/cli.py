@@ -25,10 +25,10 @@ async def run_cli() -> None:
     
     config = {"configurable": {"thread_id": "local_machine_test"}}
     state = await chain.ainvoke({"messages": []}, config)
-    print(f"BOT: {state['messages'][-1].content}")
+    print(f"\nBOT: {state['messages'][-1].content}")
     
     while not state.get("finished"):
-        user_input = input("USER: ")
+        user_input = input("\nUSER: ")
         if not user_input.strip(): continue
         
         pre_count = len(state["messages"])
@@ -40,7 +40,7 @@ async def run_cli() -> None:
         new_msgs = state["messages"][pre_count + 1:]
         for m in new_msgs:
             if isinstance(m, AIMessage):
-                print(f"BOT: {m.content}")
+                print(f"\nBOT: {m.content}")
     print("\n--- Conversation Finished ---")
 
 
