@@ -12,7 +12,7 @@ def gen_workflow_img() -> None:
             f.write(graph_png)
         print("Graph visualization exported to 'chatbot_graph.png'")
     except Exception as e:
-        print(f"Could not export graph image: {e}")
+        print(f"Could not export graph image:{e}")
 
 
 async def run_cli() -> None:
