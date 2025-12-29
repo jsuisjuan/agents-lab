@@ -62,7 +62,9 @@ async def main() -> None:
     except Exception as e:
         print(f"Could not export 'chatbot_graph.png': {e}")
     
-    state = await chain.ainvoke({"topic": "cats"})
+    choosen_topic = input()
+    
+    state = await chain.ainvoke({"topic": choosen_topic})
     print(f"Initial joke:\n{state['joke']}\n--- --- ---\n")
     if "improved_joke" in state:
         print(f"Improved joke:\n{state['improved_joke']}\n--- --- ---\n")
