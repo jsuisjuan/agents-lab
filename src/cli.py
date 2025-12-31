@@ -27,20 +27,24 @@ async def run_cli() -> None:
     state = await chain.ainvoke({"messages": []}, config)
     print(f"\nBOT: {state['messages'][-1].content}")
     
-    while not state.get("finished"):
+    while True:
         user_input = input("\nUSER: ")
-        if not user_input.strip(): continue
+        if not user_input.strip(): 
+            continue
         
         pre_count = len(state["messages"])
         user_msg = HumanMessage(content=user_input)
         
         chain.update_state(config, {"messages": [user_msg]})
         state = await chain.ainvoke(None, config)
-        
+        snapshot_after = chain.get_state(config)
         new_msgs = state["messages"][pre_count + 1:]
         for m in new_msgs:
             if isinstance(m, AIMessage):
                 print(f"\nBOT: {m.content}")
+        
+        if state.get("finished") or snapshot_after.next == ():
+            break
     print("\n--- Conversation Finished ---")
 
 

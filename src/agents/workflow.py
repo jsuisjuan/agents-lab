@@ -42,8 +42,7 @@ class EmailExtraction(BaseModel):
     """Extract user's e-mail."""
     email: Optional[str] = Field(None, description=(
         "The person's email address. Return None if "
-        "no valid email is present."
-    ))
+        "no valid email is present."))
 
 
 async def greet_user(_state: State) -> NodeResponse:
@@ -91,7 +90,7 @@ async def collect_name(state: State) -> NodeResponse:
             "Be professional: Explain that you need the name to proceed "
             "and ask again politely.")
         chat_response = await gen_instructed_res(state, instruction)
-        return {"name": "", "messages": [chat_response]}
+        return {"messages": [chat_response]}
     
     instruction = (f"The user is {user_name}. Acknowledge it in one "
         "short sentence and ask for their email address professionally.")
@@ -106,37 +105,20 @@ async def collect_email(state: State) -> NodeResponse:
     last_msg = state["messages"][-1]
     if isinstance(last_msg, AIMessage): return {}
     
-    user_email = ""
-    try:
-        extraction_prompt = (
-            "Analyze the following user input: '{text}'. "
-            "Your task is to extract a valid email address. "
-            "If the user is asking a question, expressing doubt, "
-            "being rude, or if no email is explicitly mentioned, "
-            "return None. Do not try to guess or invent an email."
-        ).format(text=last_msg.content)
-        llm_with_structure = llm.with_structured_output(EmailExtraction)
-        result = await llm_with_structure.ainvoke(extraction_prompt)
-        user_email = result.email.strip() if (result and result.email) else ""
-    except Exception:
-        user_email = ""
-    
-    is_valid = False
-    if user_email:
-        email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-        is_valid = re.match(email_regex, user_email) is not None
-    
-    if not is_valid:
+    email_regex = r'\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b'
+    matches = re.findall(email_regex, last_msg.content)
+    user_email = matches[0] if matches else ""
+    if not user_email:
         instruction = ("The user did not provide a valid email. They "
             "might be skeptical, asking why you need it, or talking "
             "about unrelated things. Respond professionally: explain "
             "that the email is essential for the activity's follow-up "
             "and ask for it again politely.")
         chat_response = await gen_instructed_res(state, instruction)
-        return {"email": "", "messages": [chat_response]}
+        return {"messages": [chat_response]}
     
     instruction = (f"Confirm to {state['name']} that you recorded the "
-        f"email {user_email}. Keep it brief and move to completion.")
+        f"email {user_email}. Keep it brief and professional.")
     chat_response = await gen_instructed_res(state, instruction)
     return {"email": user_email, "messages": [chat_response]}
 
@@ -175,13 +157,17 @@ async def gen_instructed_res(state: State, instruction: str) -> AIMessage:
 def route_after_name(state: State) -> str:
     """Decide if the user name is valid or if need to collect again.
     """
-    return "collect_name" if not state.get("name") else "collect_email"
+    user_name = state.get("name")
+    hasnt_name = not user_name or user_name.strip() == ""
+    return "collect_name" if hasnt_name else "collect_email"
     
 
 def route_after_email(state: State) -> str:
     """Decide if user's email is valid or if need to collect again.
     """
-    return "collect_email" if not state.get("email") else "finalize_dialogue"
+    user_email = state.get("email")
+    hasnt_email = not user_email or user_email.strip() == ""
+    return "collect_email" if hasnt_email else "finalize_dialogue"
 
 
 # Graph Construction
