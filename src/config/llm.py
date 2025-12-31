@@ -10,7 +10,7 @@ def get_model() -> ChatGroq:
     return ChatGroq(
         model="llama-3.1-8b-instant",
         temperature=0.0,
-        max_retries=2,
+        max_retries=3,
         api_key=GROQ_API_KEY
     )
 

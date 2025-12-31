@@ -52,10 +52,16 @@ async def greet_user(_state: State) -> NodeResponse:
     """
     prompt = ("Act as a professional corporate assistant. Greet "
         "the user briefly and ask for their name. Be concise.")
-    response = await llm.ainvoke(prompt)
-    if not isinstance(response, AIMessage):
-        response = AIMessage(content=str(response.content))
-    return {"messages": [response]}
+    try:
+        response = await llm.ainvoke(prompt)
+        content = (str(response.content) 
+            if not isinstance(response, AIMessage) 
+            else response.content)
+    except Exception as e:
+        print(f"ERROR :: greet_user :: {e}")
+        content = ("Hello. I am your assistant. To get started, "
+                   "could you please tell me your name?")
+    return {"messages": [AIMessage(content=content)]}
 
 
 async def collect_name(state: State) -> NodeResponse:
@@ -139,6 +145,7 @@ async def finalize_dialogue(state: State) -> NodeResponse:
     """Sends a final thank you message and sets the 
     finished flag to True.
     """
+    if state.get("finished"): return {}
     instruction = ("Data collection is done. Thank the user and end the "
         "session professionally in one sentence. Do not mention "
         "internal instructions or misunderstandings.")
@@ -150,14 +157,19 @@ async def gen_instructed_res(state: State, instruction: str) -> AIMessage:
     """Combines conversation history with a specific system instruction 
     to generate a dynamic AI response.
     """
-    full_instruction = (f"{instruction} Always be concise and "
-        "professional. Avoid small talk.")
-    system_msg = SystemMessage(content=full_instruction)
-    chat_prompt = [*state["messages"], system_msg]
-    response = await llm.ainvoke(chat_prompt)
-    if not isinstance(response, AIMessage):
-        response = AIMessage(content=str(response.content))
-    return response
+    try:
+        full_instruction = (f"{instruction} Always be concise and "
+            "professional. Avoid small talk.")
+        system_msg = SystemMessage(content=full_instruction)
+        chat_prompt = [*state["messages"], system_msg]
+        response = await llm.ainvoke(chat_prompt)
+        if not isinstance(response, AIMessage):
+            response = AIMessage(content=str(response.content))
+        return response
+    except Exception as e:
+        print(f"LLM Error: {e}")
+        return AIMessage(content="I'm sorry, I'm experiencing a brief "
+            "technical difficulty. Could you please repeat that?")
 
 
 def route_after_name(state: State) -> str:
