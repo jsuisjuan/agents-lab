@@ -27,10 +27,19 @@ fallback_prompt = (
     "these rules.")
 
 extraction_prompt = (
-    "Analyze the text: '{text}'. "
-    "Extract the person's name accurately based on "
-    "the schema. If no REAL name is mentioned, return "
-    "null for the name field. RESPOND IN JSON FORMAT.")
+    "Analyze the text: '{text}'.\n"
+    "Your task is to extract the user's name accurately.\n"
+    "RULES:\n"
+    "1. IGNORE pronouns like 'you', 'I', 'me', 'he', 'she'."
+    " These are NOT names.\n"
+    "2. IGNORE generic vocatives like 'bro', 'man', 'buddy'.\n"
+    "3. If the user asks a question, return name=null.\n"
+    "4. ONLY return a name if explicitly introduced (e.g., "
+    "'I am Juan').\n\n"
+    "IMPORTANT: You MUST explain your reasoning first.\n"
+    "OUTPUT FORMAT: JSON with keys 'reasoning' and 'name'.\n"
+    "EXAMPLE: {{\"reasoning\": \"The user is asking a question.\","
+    " \"name\": null}}")
 
 success_prompt = (
     "The user is {name}. Acknowledge it in one "
@@ -39,9 +48,14 @@ success_prompt = (
 
 
 class NameExtraction(BaseModel):
-    """Extract user's name."""
+    """Extract user's name with analysis."""
+    reasoning: str = Field(default="", description=(
+        "Think step-by-step: Is the word a proper name? Is it just "
+        "a pronoun like 'you', 'I', 'he', 'bro', 'dude'? Is the "
+        "user refusing?"))
     name: Optional[str] = Field(None, description=(
-        "The person's name. Return None if NO REAL NAME is found."))
+        "The person's name. Return NULL if the word is a pronoun, "
+        "a common noun, or if NO REAL NAME is found."))
 
 
 logger = logging.getLogger(__name__)
@@ -65,8 +79,9 @@ async def collect_name(state: State) -> NodeResponse:
                     exc_info=True)
         name = ""
     
-    blacklist = ["user", "none", "unknown", "customer", 
-                 "guest", "null", "n/a"]
+    blacklist = ["user", "none", "unknown", "customer", "guest", 
+             "null", "n/a", "you", "i", "me", "he", "she", 
+             "bro", "man"]
     if not name or name.lower().strip() in blacklist:
         response = await gen_instructed_res(state, fallback_prompt)
         return {"messages": [response]}
