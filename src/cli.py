@@ -1,7 +1,10 @@
 import sys, asyncio
 from src.agents.workflow import chain
 from langchain_core.messages import HumanMessage, AIMessage
+from src.utils.logger import setup_logging
 
+
+setup_logging()
 
 def gen_workflow_img() -> None:
     """Generates a graph image of the current workflow.
