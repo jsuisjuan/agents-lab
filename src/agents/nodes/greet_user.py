@@ -4,13 +4,11 @@ from src.agents.state import NodeResponse, State
 from src.utils.decorators import log_execution
 from src.config import llm
 
-
-greet_prompt = (
+logger = logging.getLogger(__name__)
+GREET_PROMPT = (
     "Act as a professional corporate assistant. Greet "
     "the user briefly and ask for their name. Be concise.")
 
-
-logger = logging.getLogger(__name__)
 
 @log_execution
 async def greet_user(_state: State) -> NodeResponse:
@@ -18,7 +16,7 @@ async def greet_user(_state: State) -> NodeResponse:
     the assistante and asking for the user's name.
     """
     try:
-        response = await llm.ainvoke(greet_prompt)
+        response = await llm.ainvoke(GREET_PROMPT)
         content = (str(response.content) 
             if not isinstance(response, AIMessage) 
             else response.content)
